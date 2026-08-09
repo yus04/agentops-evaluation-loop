@@ -198,29 +198,30 @@ class OrderSupportAgent:
             )
 
             # オフライン評価データセット生成に必要な業務属性をトレースへ添付する
-            trace.update(output={"final_answer": result.final_answer})
+            trace_metadata = {
+                "agentops": {
+                    "classification": result.classification,
+                    "tool_plan": result.tool_plan,
+                    "tool_executions": result.tool_executions,
+                    "validation": result.validation,
+                    "errors": result.errors,
+                    "metrics": {
+                        "latency_ms": result.latency_ms,
+                        "total_tokens": result.total_tokens,
+                        "estimated_cost_usd": result.estimated_cost_usd,
+                        "tool_call_count": len(result.tool_executions),
+                        "error_count": len(result.errors),
+                        "node_timings": result.node_timings,
+                    },
+                    "candidate_keys": sorted(self.candidate.components),
+                    "models": self.context.model_policy.per_node,
+                    "tools_enabled": list(self.context.tool_policy.enabled),
+                }
+            }
+            trace.update(output={"final_answer": result.final_answer}, metadata=trace_metadata)
             trace.update_trace(
                 output={"final_answer": result.final_answer},
-                metadata={
-                    "agentops": {
-                        "classification": result.classification,
-                        "tool_plan": result.tool_plan,
-                        "tool_executions": result.tool_executions,
-                        "validation": result.validation,
-                        "errors": result.errors,
-                        "metrics": {
-                            "latency_ms": result.latency_ms,
-                            "total_tokens": result.total_tokens,
-                            "estimated_cost_usd": result.estimated_cost_usd,
-                            "tool_call_count": len(result.tool_executions),
-                            "error_count": len(result.errors),
-                            "node_timings": result.node_timings,
-                        },
-                        "candidate_keys": sorted(self.candidate.components),
-                        "models": self.context.model_policy.per_node,
-                        "tools_enabled": list(self.context.tool_policy.enabled),
-                    }
-                },
+                metadata=trace_metadata,
             )
             return result
 

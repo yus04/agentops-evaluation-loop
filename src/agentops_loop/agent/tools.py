@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 TOOL_TIMEOUT_S = float(os.environ.get("AGENT_TOOL_TIMEOUT_S", "20"))
 
 
+def _mcp_environment() -> dict[str, str]:
+    return {name: value for name, value in os.environ.items() if name != "PS1"}
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -68,7 +72,7 @@ class ToolRuntime:
                         "command": sys.executable,
                         "args": ["-m", "agentops_loop.mcp_server.order_support"],
                         "transport": "stdio",
-                        "env": dict(os.environ),
+                        "env": _mcp_environment(),
                     }
                 }
             )

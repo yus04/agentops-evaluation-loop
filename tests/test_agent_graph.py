@@ -38,7 +38,8 @@ class FakeChatModel:
         self._script = script
         self._answer = answer
 
-    def with_structured_output(self, schema: type, **_: Any) -> FakeStructuredRunnable:
+    def with_structured_output(self, schema: type, **kwargs: Any) -> FakeStructuredRunnable:
+        assert kwargs == {"include_raw": True, "method": "function_calling"}
         return FakeStructuredRunnable(schema, self._script)
 
     async def ainvoke(self, _messages: Any, **_: Any) -> FakeAIMessage:

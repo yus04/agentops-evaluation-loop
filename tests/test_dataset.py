@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
-from agentops_loop.dataset.build import curate, trace_to_record
+from agentops_loop.dataset import build as build_module
+from agentops_loop.dataset.build import _observation_to_trace, curate, fetch_traces, trace_to_record
 from agentops_loop.dataset.promote import promote_candidates
 from agentops_loop.dataset.schema import EvalRecord, ReviewMeta, read_jsonl, write_jsonl
 
@@ -51,6 +53,56 @@ def test_trace_to_record_extracts_business_attributes() -> None:
     assert record.retrieval_context
     assert record.metrics.total_tokens == 900
     assert record.review.status == "pending"
+
+
+def test_observation_to_trace_normalizes_v4_fields() -> None:
+    observation = SimpleNamespace(
+        id="obs-1",
+        trace_id="trace-v4",
+        start_time=datetime.now(UTC),
+        input='{"user_input":"配送状況は？"}',
+        output='{"final_answer":"配送中です"}',
+        metadata={"agentops": {"errors": []}},
+        tags=["production"],
+        latency=1.25,
+        total_cost=0.004,
+    )
+
+    trace = _observation_to_trace(observation)
+    record = trace_to_record(trace)
+
+    assert trace["id"] == "trace-v4"
+    assert trace["latency"] == 1250.0
+    assert record is not None
+    assert record.input == "配送状況は？"
+    assert record.actual_output == "配送中です"
+
+
+def test_fetch_traces_uses_v4_cursor_pagination(monkeypatch) -> None:
+    first = SimpleNamespace(trace_id="trace-1", tags=["production"], latency=0)
+    second = SimpleNamespace(trace_id="trace-2", tags=["staging"], latency=0)
+    responses = [
+        SimpleNamespace(data=[first], meta=SimpleNamespace(cursor="next")),
+        SimpleNamespace(data=[second], meta=SimpleNamespace(cursor=None)),
+    ]
+
+    class Observations:
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        def get_many(self, **kwargs):
+            self.calls.append(kwargs)
+            return responses.pop(0)
+
+    observations = Observations()
+    client = SimpleNamespace(api=SimpleNamespace(observations=observations))
+    monkeypatch.setattr(build_module, "init_tracing", lambda: client)
+
+    traces = fetch_traces(limit=10, tags=["production"])
+
+    assert [trace["id"] for trace in traces] == ["trace-1"]
+    assert [call["cursor"] for call in observations.calls] == [None, "next"]
+    assert all(call["is_root_observation"] is True for call in observations.calls)
 
 
 def test_trace_without_user_input_is_skipped() -> None:

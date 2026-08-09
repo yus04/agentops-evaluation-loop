@@ -44,7 +44,7 @@ jobs:
       LANGFUSE_TRACING_ENVIRONMENT: offline-eval
       # Judge はエージェント用モデルと分離する
       JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER || 'openai' }}
-      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-4o' }}
+      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-5' }}
       AGENT_TOOLS_MODE: local
       DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
 

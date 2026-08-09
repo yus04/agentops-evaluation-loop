@@ -6,14 +6,41 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class AgentSettings(BaseSettings):
+class LLMEnvironmentSettings(BaseSettings):
+    """`.env` のプロバイダー資格情報を各 SDK の標準環境変数へ公開する."""
+
+    openai_api_key: SecretStr | None = Field(default=None, validation_alias="OPENAI_API_KEY")
+    azure_openai_api_key: SecretStr | None = Field(
+        default=None, validation_alias="AZURE_OPENAI_API_KEY"
+    )
+    azure_openai_endpoint: str | None = Field(
+        default=None, validation_alias="AZURE_OPENAI_ENDPOINT"
+    )
+    openai_api_version: str | None = Field(default=None, validation_alias="OPENAI_API_VERSION")
+
+    def model_post_init(self, __context: object) -> None:
+        values = {
+            "OPENAI_API_KEY": self.openai_api_key,
+            "AZURE_OPENAI_API_KEY": self.azure_openai_api_key,
+            "AZURE_OPENAI_ENDPOINT": self.azure_openai_endpoint,
+            "OPENAI_API_VERSION": self.openai_api_version,
+        }
+        for name, value in values.items():
+            if value is None:
+                continue
+            resolved = value.get_secret_value() if isinstance(value, SecretStr) else value
+            os.environ.setdefault(name, resolved)
+
+
+class AgentSettings(LLMEnvironmentSettings):
     """本番エージェント (コンテナ) の設定."""
 
     model_config = SettingsConfigDict(
@@ -41,7 +68,7 @@ class AgentSettings(BaseSettings):
     service_name: str = "order-support-agent"
 
 
-class JudgeSettings(BaseSettings):
+class JudgeSettings(LLMEnvironmentSettings):
     """DeepEval (LLM-as-a-Judge) 用の設定. エージェントとは別モデルを使う."""
 
     model_config = SettingsConfigDict(
@@ -49,7 +76,7 @@ class JudgeSettings(BaseSettings):
     )
 
     provider: str = "openai"
-    model: str = "gpt-4o"
+    model: str = "gpt-5"
     temperature: float = 0.0
     request_timeout_s: float = 120.0
     max_retries: int = 3
@@ -57,7 +84,7 @@ class JudgeSettings(BaseSettings):
     max_concurrency: int = 4
 
 
-class ReflectionSettings(BaseSettings):
+class ReflectionSettings(LLMEnvironmentSettings):
     """GEPA の reflection LM (改善候補を書く側) の設定."""
 
     model_config = SettingsConfigDict(
@@ -65,7 +92,7 @@ class ReflectionSettings(BaseSettings):
     )
 
     provider: str = "openai"
-    model: str = "gpt-4o"
+    model: str = "gpt-5"
     temperature: float = 1.0
     request_timeout_s: float = 180.0
 

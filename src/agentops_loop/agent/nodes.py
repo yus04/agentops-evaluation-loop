@@ -106,7 +106,9 @@ async def _structured_call(
     model_name = ctx.model_policy.for_node(node)
     messages = [SystemMessage(content=system), HumanMessage(content=_dumps(user_payload))]
     try:
-        result = await model.with_structured_output(schema, include_raw=True).ainvoke(messages)
+        result = await model.with_structured_output(
+            schema, include_raw=True, method="function_calling"
+        ).ainvoke(messages)
     except Exception as exc:  # noqa: BLE001 - LLM 障害はトレース/評価対象として記録する
         logger.warning("ノード %s の LLM 呼び出しに失敗しました", node, exc_info=True)
         return None, _usage_entry(node, model_name, None), f"{node}_llm_error: {exc}"

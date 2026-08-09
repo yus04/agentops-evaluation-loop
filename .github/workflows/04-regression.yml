@@ -35,7 +35,7 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER || 'openai' }}
-      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-4o' }}
+      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-5' }}
       AGENT_TOOLS_MODE: local
       LANGFUSE_ENABLED: "false"
       DEEPEVAL_TELEMETRY_OPT_OUT: "YES"

@@ -10,7 +10,7 @@
 
 gepa:
   # 評価 (メトリクス) 呼び出し回数の上限。コスト上限に直結する。
-  max_metric_calls: 60
+  max_metric_calls: 10
   # reflection 1 回あたりに読むサンプル数
   reflection_minibatch_size: 3
   # Pareto フロンティアからの候補選択戦略

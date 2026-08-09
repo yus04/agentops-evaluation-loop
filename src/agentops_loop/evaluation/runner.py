@@ -160,7 +160,7 @@ def build_test_case(record: EvalRecord) -> LLMTestCase:
         "input": record.input,
         "actual_output": record.actual_output or "",
         "retrieval_context": record.retrieval_context or None,
-        "tools_called": tools_called or None,
+        "tools_called": tools_called,
         "expected_tools": expected_tools or None,
     }
     if record.expected_output:
@@ -232,7 +232,7 @@ def _evaluate_one(record: EvalRecord, specs: list[MetricSpec]) -> RecordEvaluati
                     key=spec.key,
                     label=spec.label,
                     category=spec.category,
-                    score=None,
+                    score=0.0,
                     reason=f"評価に失敗しました: {exc}",
                     threshold=spec.threshold,
                     weight=spec.weight,
@@ -292,14 +292,23 @@ def evaluate_records(
     candidate_keys: list[str] | None = None,
 ) -> EvaluationReport:
     """データセットを DeepEval で採点し、スコアと理由を含むレポートを返す."""
+    usable = [record for record in records if record.is_usable()]
+    if not usable:
+        raise ValueError("評価対象のレコードがありません")
+    missing_outputs = [record.id for record in usable if not record.actual_output.strip()]
+    if missing_outputs:
+        examples = ", ".join(missing_outputs[:5])
+        suffix = " ..." if len(missing_outputs) > 5 else ""
+        raise ValueError(
+            f"actual_output が未設定の評価レコードが {len(missing_outputs)} 件あります "
+            f"({examples}{suffix})。現在のエージェントで実行してから評価するには "
+            "--rerun を指定してください。"
+        )
+
     config = load_evaluation_config()
     run_config = config.get("run", {}) or {}
     specs = specs if specs is not None else build_metric_specs(config, build_judge_model())
     workers = max_concurrency or int(run_config.get("max_concurrency", 4))
-
-    usable = [record for record in records if record.is_usable()]
-    if not usable:
-        raise ValueError("評価対象のレコードがありません")
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         evaluations = list(pool.map(lambda r: _evaluate_one(r, specs), usable))

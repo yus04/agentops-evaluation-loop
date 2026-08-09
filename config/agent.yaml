@@ -7,8 +7,8 @@
 # =============================================================================
 
 allowed_models:
-  - gpt-4o-mini
-  - gpt-4o
+  - gpt-5-mini
+  - gpt-5
   - gpt-4.1-mini
   - gpt-4.1
 
@@ -56,8 +56,8 @@ tools:
 # ---------------------------------------------------------------------------
 models:
   per_node:
-    classify: gpt-4o-mini
-    select_tools: gpt-4o-mini
-    validate: gpt-4o-mini
+    classify: gpt-5-mini
+    select_tools: gpt-5-mini
+    validate: gpt-5-mini
     respond: gpt-4.1
   temperature: 0.0

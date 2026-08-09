@@ -281,8 +281,8 @@ cp .env.example .env
 | --- | --- |
 | `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` |
 | `LANGFUSE_TRACING_ENVIRONMENT` | `production` |
-| `JUDGE_MODEL` / `JUDGE_PROVIDER` | `gpt-4o` / `openai` |
-| `REFLECTION_MODEL` / `REFLECTION_PROVIDER` | `gpt-4o` / `openai` |
+| `JUDGE_MODEL` / `JUDGE_PROVIDER` | `gpt-5` / `openai` |
+| `REFLECTION_MODEL` / `REFLECTION_PROVIDER` | `gpt-5` / `openai` |
 
 **リポジトリ権限**: Settings → Actions → General →
 「Allow GitHub Actions to create and approve pull requests」を有効にしてください
@@ -578,7 +578,7 @@ golden.jsonl ──split──▶ trainset / valset
 `make_reflective_dataset` の Feedback には、コンポーネントごとの
 **役割説明・制約・改善の着眼点**が併記されます (`component_guidance`)。例:
 
-- `policy/models`: 「使用できるモデル名は `["gpt-4o-mini", "gpt-4o", ...]` に限られます。
+- `policy/models`: 「使用できるモデル名は `["gpt-5-mini", "gpt-5", ...]` に限られます。
   安価なモデルで十分なノードは安価に、品質が要求されるノードは高性能モデルにしてください」
 - `policy/tools`: 「ツール説明文が曖昧だと選択を誤ります。いつ使う/使わないかを説明文に書いてください」
 - `instructions/validate`: 「Faithfulness が低い場合は検証の甘さが原因です」

@@ -170,13 +170,17 @@ def evaluate(
     if rerun:
         records = refresh_records(records, candidate, tools_mode, concurrency)
 
-    report = evaluate_records(
-        records,
-        label=label,
-        push_scores=push_scores,
-        max_concurrency=concurrency,
-        candidate_keys=sorted(candidate.components),
-    )
+    try:
+        report = evaluate_records(
+            records,
+            label=label,
+            push_scores=push_scores,
+            max_concurrency=concurrency,
+            candidate_keys=sorted(candidate.components),
+        )
+    except ValueError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
     output_dir = Path(output_dir)
     report.save(output_dir / "evaluation_report.json")
     (output_dir / "evaluation_report.md").write_text(report.render_markdown(), encoding="utf-8")

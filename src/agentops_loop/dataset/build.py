@@ -60,7 +60,7 @@ def fetch_traces(
     tags: list[str] | None = None,
     environment: str | None = None,
 ) -> list[Any]:
-    """Langfuse から指定期間のトレースを取得する."""
+    """Langfuse v4 Observations API から指定期間のルート span を取得する."""
     client = init_tracing()
     if client is None:
         raise TraceFetchError(
@@ -71,39 +71,58 @@ def fetch_traces(
     from_ts = to_ts - timedelta(hours=lookback_hours)
 
     collected: list[Any] = []
-    page = 1
-    page_size = min(100, limit)
+    cursor: str | None = None
+    page_size = min(1000, limit)
+    required_tags = set(tags or [])
 
     while len(collected) < limit:
         kwargs: dict[str, Any] = {
-            "page": page,
+            "fields": "core,basic,io,metadata,usage,metrics,trace_context",
+            "expand_metadata": "agentops",
             "limit": page_size,
-            "from_timestamp": from_ts,
-            "to_timestamp": to_ts,
+            "cursor": cursor,
+            "is_root_observation": True,
+            "from_start_time": from_ts,
+            "to_start_time": to_ts,
         }
-        if tags:
-            kwargs["tags"] = tags
         if environment:
-            kwargs["environment"] = [environment]
+            kwargs["environment"] = environment
 
         try:
-            response = client.api.trace.list(**kwargs)
-        except TypeError:
-            kwargs.pop("environment", None)
-            response = client.api.trace.list(**kwargs)
+            response = client.api.observations.get_many(**kwargs)
         except Exception as exc:  # noqa: BLE001
             raise TraceFetchError(f"トレース取得に失敗しました: {exc}") from exc
 
         batch = list(_attr(response, "data", default=[]) or [])
         if not batch:
             break
-        collected.extend(batch)
-        page += 1
-        if len(batch) < page_size:
+        collected.extend(
+            _observation_to_trace(observation)
+            for observation in batch
+            if required_tags.issubset(set(_attr(observation, "tags", default=[]) or []))
+        )
+        next_cursor = _attr(_attr(response, "meta", default={}), "cursor", default=None)
+        if not next_cursor or next_cursor == cursor:
             break
+        cursor = str(next_cursor)
 
     logger.info("Langfuse から %d 件のトレースを取得しました", len(collected))
     return collected[:limit]
+
+
+def _observation_to_trace(observation: Any) -> dict[str, Any]:
+    """v4 root observation を既存の trace 変換処理が読める形へ正規化する."""
+    latency_seconds = float(_attr(observation, "latency", default=0) or 0)
+    return {
+        "id": str(_attr(observation, "trace_id", "traceId", "id", default="") or ""),
+        "timestamp": _attr(observation, "start_time", "startTime", default=None),
+        "input": _attr(observation, "input", default={}),
+        "output": _attr(observation, "output", default={}),
+        "metadata": _attr(observation, "metadata", default={}),
+        "tags": list(_attr(observation, "tags", default=[]) or []),
+        "latency": latency_seconds * 1000.0,
+        "total_cost": float(_attr(observation, "total_cost", "totalCost", default=0) or 0),
+    }
 
 
 def trace_to_record(trace: Any) -> EvalRecord | None:

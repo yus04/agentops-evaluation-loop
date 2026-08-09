@@ -15,7 +15,7 @@ dependencies = [
     "langchain-mcp-adapters>=0.1.0",
     "mcp>=1.2.0",
     # --- Observability ---
-    "langfuse>=3.0.0",
+    "langfuse>=4.7.0",
     "opentelemetry-sdk>=1.29.0",
     "opentelemetry-exporter-otlp-proto-http>=1.29.0",
     # --- Serving / config / CLI ---

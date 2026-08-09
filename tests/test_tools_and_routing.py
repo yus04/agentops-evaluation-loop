@@ -4,7 +4,7 @@ import pytest
 
 from agentops_loop.agent.candidate import AgentCandidate
 from agentops_loop.agent.nodes import route_after_validation
-from agentops_loop.agent.tools import ToolRuntime
+from agentops_loop.agent.tools import ToolRuntime, _mcp_environment
 
 
 @pytest.fixture
@@ -13,6 +13,16 @@ def runtime() -> ToolRuntime:
     return ToolRuntime(
         policy=seed.tool_policy(), catalog=seed.meta["tool_catalog"], mode="local"
     )
+
+
+def test_mcp_environment_excludes_interactive_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PS1", "${unexpanded_prompt}")
+    monkeypatch.setenv("MCP_TEST_VALUE", "available")
+
+    environment = _mcp_environment()
+
+    assert "PS1" not in environment
+    assert environment["MCP_TEST_VALUE"] == "available"
 
 
 async def test_lookup_order_returns_order(runtime: ToolRuntime) -> None:

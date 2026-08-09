@@ -253,7 +253,7 @@ class AgentCandidate:
             if not candidate_model and base is not None:
                 candidate_model = base.for_node(node)
             if not candidate_model:
-                candidate_model = allowed[0] if allowed else "gpt-4o-mini"
+                candidate_model = allowed[0] if allowed else "gpt-5-mini"
             per_node[node] = candidate_model
 
         try:

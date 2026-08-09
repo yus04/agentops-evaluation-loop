@@ -50,7 +50,7 @@ requires-dist = [
     { name = "langchain-core", specifier = ">=0.3.0" },
     { name = "langchain-mcp-adapters", specifier = ">=0.1.0" },
     { name = "langchain-openai", specifier = ">=0.2.0" },
-    { name = "langfuse", specifier = ">=3.0.0" },
+    { name = "langfuse", specifier = ">=4.7.0" },
     { name = "langgraph", specifier = ">=0.2.60" },
     { name = "mcp", specifier = ">=1.2.0" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.29.0" },

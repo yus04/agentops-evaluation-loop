@@ -10,7 +10,7 @@ judge:
   # エージェント用モデルとは必ず分離する (自己評価バイアスの回避)
   # 実際の値は環境変数 JUDGE_MODEL / JUDGE_PROVIDER で上書きできる
   provider: openai
-  model: gpt-4o
+  model: gpt-5
   temperature: 0.0
 
 run:
