@@ -1,0 +1,20 @@
+# モデル別の概算単価 (USD / 1M tokens)。
+# Langfuse 側でも自動計算されるが、オフライン評価レポートで
+# コスト指標を出すためにローカルにも保持する。
+# 価格改定時はここを更新する。
+pricing:
+  gpt-4o-mini:
+    input: 0.15
+    output: 0.60
+  gpt-4o:
+    input: 2.50
+    output: 10.00
+  gpt-4.1-mini:
+    input: 0.40
+    output: 1.60
+  gpt-4.1:
+    input: 2.00
+    output: 8.00
+default:
+  input: 1.00
+  output: 4.00

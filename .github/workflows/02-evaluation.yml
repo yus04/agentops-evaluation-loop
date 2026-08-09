@@ -1,0 +1,89 @@
+name: 02 - Batch Evaluation (DeepEval)
+
+# =============================================================================
+# 【改善フェーズ 1/3】確定した評価データセット (golden.jsonl) に対して
+# DeepEval でスコアと失敗理由を生成する。
+#
+# トリガー:
+#   - main への golden.jsonl 更新 (= データセットレビュー PR のマージ)
+#   - 手動実行
+# 成功すると **03 - GEPA Optimization** がチェーン起動する。
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/datasets/golden.jsonl"
+      - "config/evaluation.yaml"
+  workflow_dispatch:
+    inputs:
+      rerun_agent:
+        description: "現在のエージェント設定で再実行してから評価する"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: improvement-loop
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: DeepEval batch evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ vars.LANGFUSE_BASE_URL || 'https://cloud.langfuse.com' }}
+      LANGFUSE_TRACING_ENVIRONMENT: offline-eval
+      # Judge はエージェント用モデルと分離する
+      JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER || 'openai' }}
+      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-4o' }}
+      AGENT_TOOLS_MODE: local
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies (agent + eval)
+        run: uv sync --frozen --no-dev --extra eval
+
+      - name: Run DeepEval batch evaluation
+        run: |
+          uv run agentops evaluate \
+            --dataset data/datasets/golden.jsonl \
+            --label "batch-evaluation-${{ github.run_number }}" \
+            --output artifacts \
+            --rerun \
+            --tools-mode local \
+            --concurrency 4 \
+            --push-scores
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f artifacts/evaluation_report.md ]; then
+            cat artifacts/evaluation_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evaluation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-report
+          path: |
+            artifacts/evaluation_report.json
+            artifacts/evaluation_report.md
+          retention-days: 30
+          if-no-files-found: error

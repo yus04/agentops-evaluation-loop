@@ -1,0 +1,63 @@
+# =============================================================================
+# エージェント設定
+#
+# - `tools` と `models` は GEPA の最適化対象 (candidate の policy/* コンポーネント)
+# - `allowed_models` と `tool_catalog` は最適化対象外の固定メタ情報 (ガードレール)
+#   GEPA が allowlist 外のモデル名やカタログ外のツール名を書いても無視される。
+# =============================================================================
+
+allowed_models:
+  - gpt-4o-mini
+  - gpt-4o
+  - gpt-4.1-mini
+  - gpt-4.1
+
+tool_catalog:
+  lookup_order:
+    default_description: "注文 ID から注文の明細・金額・ステータス・購入日を取得する。"
+    args: [order_id]
+  track_shipment:
+    default_description: "注文 ID から配送業者・追跡番号・現在地・配達予定日を取得する。"
+    args: [order_id]
+  check_return_eligibility:
+    default_description: "注文 ID から返品可能かどうか、返品期限、条件を判定する。"
+    args: [order_id]
+  create_return_request:
+    default_description: "返品申請を作成する。返品可否を確認した後にのみ使用する副作用のある操作。"
+    args: [order_id, reason]
+  get_refund_status:
+    default_description: "注文 ID から返金処理の進捗と着金予定日を取得する。"
+    args: [order_id]
+  search_policy:
+    default_description: "返品・返金・配送・キャンセルなどの社内ポリシー文書を検索して根拠となる条文を返す。"
+    args: [query]
+  escalate_to_human:
+    default_description: "自動対応の範囲を超える場合に有人サポートへ引き継ぐ。"
+    args: [reason, priority]
+
+# ---------------------------------------------------------------------------
+# GEPA 最適化対象: ツールポリシー
+# ---------------------------------------------------------------------------
+tools:
+  enabled:
+    - lookup_order
+    - track_shipment
+    - check_return_eligibility
+    - create_return_request
+    - get_refund_status
+    - search_policy
+    - escalate_to_human
+  # ツール説明文の上書き。ツール選択精度に直結するため最適化価値が高い。
+  descriptions: {}
+  max_tool_calls: 4
+
+# ---------------------------------------------------------------------------
+# GEPA 最適化対象: モデル選択
+# ---------------------------------------------------------------------------
+models:
+  per_node:
+    classify: gpt-4o-mini
+    select_tools: gpt-4o-mini
+    validate: gpt-4o-mini
+    respond: gpt-4.1
+  temperature: 0.0

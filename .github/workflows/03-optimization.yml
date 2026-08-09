@@ -1,0 +1,92 @@
+name: 03 - GEPA Optimization
+
+# =============================================================================
+# 【改善フェーズ 2/3】DeepEval のスコア + 失敗理由をもとに GEPA で
+# インストラクション / スキル / ツール / モデル選択を最適化する。
+#
+# トリガー: 「02 - Batch Evaluation」の成功時 (チェーン実行)
+# 受け渡し: GitHub Artifacts (evaluation-report) 経由
+# 出力    : optimized-candidate アーティファクト (04 が消費する)
+# =============================================================================
+
+on:
+  workflow_run:
+    workflows: ["02 - Batch Evaluation (DeepEval)"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: improvement-loop
+  cancel-in-progress: false
+
+jobs:
+  optimize:
+    name: Optimize agent with GEPA
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER || 'openai' }}
+      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-4o' }}
+      REFLECTION_PROVIDER: ${{ vars.REFLECTION_PROVIDER || 'openai' }}
+      REFLECTION_MODEL: ${{ vars.REFLECTION_MODEL || 'gpt-4o' }}
+      AGENT_TOOLS_MODE: local
+      LANGFUSE_ENABLED: "false"
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies (agent + eval + optimize)
+        run: uv sync --frozen --no-dev --extra eval --extra optimize
+
+      - name: Download evaluation report (from 02)
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: evaluation-report
+          path: artifacts
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run GEPA optimization
+        run: |
+          uv run agentops optimize \
+            --dataset data/datasets/golden.jsonl \
+            --output artifacts
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f artifacts/optimization_summary.md ]; then
+            cat artifacts/optimization_summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload optimization artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimized-candidate
+          path: |
+            artifacts/optimized_candidate.json
+            artifacts/baseline_candidate.json
+            artifacts/baseline_report.json
+            artifacts/optimized_report.json
+            artifacts/optimization_summary.json
+            artifacts/optimization_summary.md
+          retention-days: 30
+          if-no-files-found: error

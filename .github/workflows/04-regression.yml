@@ -1,0 +1,151 @@
+name: 04 - Regression Test & Deploy PR
+
+# =============================================================================
+# 【改善フェーズ 3/3】GEPA が生成した候補を DeepEval で回帰テストし、
+# 合格した場合のみ prompts/ · skills/ · config/agent.yaml へ反映した
+# Pull Request を作成する (= 人間レビュー → マージでデプロイ)。
+#
+# トリガー: 「03 - GEPA Optimization」の成功時 (チェーン実行)
+# 受け渡し: GitHub Artifacts (optimized-candidate) 経由
+# =============================================================================
+
+on:
+  workflow_run:
+    workflows: ["03 - GEPA Optimization"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: improvement-loop
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    name: Regression test and open deploy PR
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER || 'openai' }}
+      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-4o' }}
+      AGENT_TOOLS_MODE: local
+      LANGFUSE_ENABLED: "false"
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies (agent + eval)
+        run: uv sync --frozen --no-dev --extra eval
+
+      - name: Download optimized candidate (from 03)
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: optimized-candidate
+          path: artifacts
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check optimization outcome
+        id: outcome
+        run: |
+          if [ ! -f artifacts/optimization_summary.json ]; then
+            echo "accepted=false" >> "$GITHUB_OUTPUT"
+            echo "最適化サマリが見つかりませんでした。" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          ACCEPTED=$(python -c "import json;print(str(json.load(open('artifacts/optimization_summary.json'))['outcome']['accepted']).lower())")
+          echo "accepted=${ACCEPTED}" >> "$GITHUB_OUTPUT"
+
+      - name: Run regression test (DeepEval)
+        if: steps.outcome.outputs.accepted == 'true'
+        id: regression
+        run: |
+          uv run agentops regression \
+            --candidate artifacts/optimized_candidate.json \
+            --baseline artifacts/baseline_report.json \
+            --output artifacts
+
+      - name: Publish summary
+        if: always()
+        run: |
+          for f in artifacts/optimization_summary.md artifacts/regression_summary.md; do
+            if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: Upload regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-report
+          path: |
+            artifacts/regression_report.json
+            artifacts/regression_report.md
+            artifacts/regression_outcome.json
+            artifacts/regression_summary.md
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Apply optimized candidate to repository
+        if: success() && steps.outcome.outputs.accepted == 'true'
+        run: uv run agentops apply-candidate artifacts/optimized_candidate.json
+
+      - name: Compose PR body
+        if: success() && steps.outcome.outputs.accepted == 'true'
+        run: |
+          {
+            echo "GEPA による自動最適化の結果です。回帰テストに合格しています。"
+            echo ""
+            if [ -f artifacts/optimization_summary.md ]; then cat artifacts/optimization_summary.md; fi
+            echo ""
+            if [ -f artifacts/regression_summary.md ]; then cat artifacts/regression_summary.md; fi
+            echo ""
+            echo "---"
+            echo ""
+            echo "### レビュー観点"
+            echo ""
+            echo '- `prompts/` `skills/` の変更が業務ルールに反していないか'
+            echo '- `config/agent.yaml` の `models.per_node` がコスト方針に合っているか'
+            echo '- `config/agent.yaml` の `tools.enabled` から必要なツールが外れていないか'
+            echo ""
+            echo "このPRをマージすると本番エージェントのコンテナイメージに反映されます。"
+          } > /tmp/pr-body.md
+
+      - name: Create deploy Pull Request
+        if: success() && steps.outcome.outputs.accepted == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: gepa/optimized-${{ github.run_number }}
+          base: main
+          commit-message: "feat(agent): GEPA による最適化候補を適用"
+          title: "[GEPA] エージェント最適化候補の適用 (run ${{ github.run_number }})"
+          body-path: /tmp/pr-body.md
+          labels: |
+            gepa
+            needs-human-review
+          add-paths: |
+            prompts/
+            skills/
+            config/agent.yaml
+
+      - name: Skipped (candidate not accepted)
+        if: steps.outcome.outputs.accepted != 'true'
+        run: echo "最適化候補が受け入れ基準を満たさなかったため、回帰テストと PR 作成をスキップしました。" >> "$GITHUB_STEP_SUMMARY"

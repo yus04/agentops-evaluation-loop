@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 環境変数 (API キーを含むためコミットしない)
+.env
+.env.*
+!.env.example
+
+# 実行成果物 (GitHub Artifacts 経由で受け渡すためコミットしない)
+artifacts/
+.deepeval*
+temp_test_run_data.json

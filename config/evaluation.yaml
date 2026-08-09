@@ -1,0 +1,99 @@
+# =============================================================================
+# DeepEval 評価設定
+#
+# - metrics.*.threshold : 合格ライン (0.0-1.0)
+# - metrics.*.weight    : GEPA が最適化する総合スコアへの重み
+# - GEval 系は criteria / evaluation_steps をここで管理する (プロンプトと同様に改善対象)
+# =============================================================================
+
+judge:
+  # エージェント用モデルとは必ず分離する (自己評価バイアスの回避)
+  # 実際の値は環境変数 JUDGE_MODEL / JUDGE_PROVIDER で上書きできる
+  provider: openai
+  model: gpt-4o
+  temperature: 0.0
+
+run:
+  max_concurrency: 4
+  # 評価スコアを Langfuse のトレースへ書き戻す (オンラインダッシュボードで可視化)
+  push_scores_to_langfuse: true
+
+metrics:
+  # --- 回答品質 ---------------------------------------------------------
+  answer_relevancy:
+    enabled: true
+    threshold: 0.7
+    weight: 1.0
+
+  faithfulness:
+    enabled: true
+    threshold: 0.8
+    weight: 1.5
+
+  answer_correctness:
+    enabled: true
+    threshold: 0.7
+    weight: 1.0
+    requires: [expected_output]
+    criteria: |
+      Determine whether the actual output is factually consistent with the expected output.
+      Heavily penalize contradictions in concrete values (order id, amount, date, status)
+      and omission of information that the expected output considers essential.
+      Differences in wording, politeness, or ordering are acceptable.
+
+  # --- 行動品質 ---------------------------------------------------------
+  tool_correctness:
+    enabled: true
+    threshold: 0.8
+    weight: 1.5
+    requires: [expected_tools]
+
+  tool_selection:
+    enabled: true
+    threshold: 0.7
+    weight: 1.5
+    criteria: |
+      Evaluate whether the agent selected
+      the correct tool to complete the task.
+      Consider: (1) whether every tool needed to ground the answer was called,
+      (2) whether unnecessary or redundant tools were called,
+      (3) whether the arguments passed to each tool were correct and derived from
+      the user's message rather than invented,
+      (4) whether side-effecting tools (create_return_request, escalate_to_human)
+      were only used after the required precondition checks.
+
+  # --- 業務価値 ---------------------------------------------------------
+  task_completion:
+    enabled: true
+    threshold: 0.7
+    weight: 2.0
+    criteria: |
+      Evaluate whether the agent fully resolved the user's request in a single response.
+      Score high only when the user can act without asking a follow-up question:
+      the direct answer is present, the concrete values the user needs are included,
+      and the next step (if any) is stated. If the agent asked the user for more
+      information, score high only when that information was genuinely missing and
+      the agent asked for everything it needs at once.
+
+  policy_compliance:
+    enabled: true
+    threshold: 0.8
+    weight: 1.0
+    criteria: |
+      Evaluate whether the response complies with customer support operating policy:
+      it must not invent policy terms, must not promise refunds or delivery dates that
+      are not supported by the tool results, must not expose internal implementation
+      details (tool names, system state), and must not repeat or request sensitive
+      payment credentials.
+
+  operational_efficiency:
+    enabled: true
+    threshold: 0.6
+    weight: 0.5
+    # 非 LLM の決定的メトリクス (レイテンシー / コスト / ツール呼び出し数 / エラー)
+    target_latency_ms: 8000
+    max_latency_ms: 25000
+    target_cost_usd: 0.01
+    max_cost_usd: 0.05
+    target_tool_calls: 2
+    max_tool_calls: 4

@@ -1,0 +1,44 @@
+# =============================================================================
+# GEPA によるエージェント最適化設定
+#
+# 最適化対象 (candidate のコンポーネント):
+#   instructions/*  … prompts/*.md          (エージェントのインストラクション)
+#   skills/*        … skills/*.md           (スキルセット)
+#   policy/tools    … config/agent.yaml     (ツールの有効化・説明文・呼び出し上限)
+#   policy/models   … config/agent.yaml     (ノードごとのモデル選択)
+# =============================================================================
+
+gepa:
+  # 評価 (メトリクス) 呼び出し回数の上限。コスト上限に直結する。
+  max_metric_calls: 60
+  # reflection 1 回あたりに読むサンプル数
+  reflection_minibatch_size: 3
+  # Pareto フロンティアからの候補選択戦略
+  candidate_selection_strategy: pareto
+  # 2 つの Pareto 最適候補を統合するマージ操作
+  use_merge: true
+  seed: 20260101
+  display_progress_bar: false
+
+dataset:
+  # golden.jsonl を train / val に分割する比率
+  train_ratio: 0.6
+  # 1 回の最適化で使うレコード数の上限 (コスト制御)
+  max_records: 24
+  shuffle_seed: 20260101
+
+agent:
+  # 最適化ループ中はローカルツールを使い、MCP プロセス起動のオーバーヘッドを避ける
+  # 本番と同じ経路で検証したい場合は "mcp" にする
+  tools_mode: local
+  concurrency: 4
+
+# 最適化対象コンポーネントの絞り込み。空なら全コンポーネント。
+# 例: ["instructions/respond", "skills/returns", "policy/tools"]
+components: []
+
+acceptance:
+  # 最適化後の候補を採用する条件 (これを満たさない場合 PR を作らない)
+  min_absolute_improvement: 0.005
+  # 個別メトリクスの劣化許容幅
+  max_metric_regression: 0.05

@@ -1,0 +1,29 @@
+# =============================================================================
+# 回帰テスト設定 (最適化後の候補を本番へ出す前のゲート)
+# =============================================================================
+
+dataset:
+  # 回帰テスト専用データセット。存在しない場合は golden.jsonl を使う。
+  path: data/datasets/regression.jsonl
+  fallback_to_golden: true
+
+agent:
+  tools_mode: local
+  concurrency: 4
+
+gates:
+  # 総合スコアがベースラインからこれ以上落ちたら不合格
+  max_overall_regression: 0.01
+  # 個別メトリクスの劣化許容幅
+  max_metric_regression: 0.05
+  # 合格率の下限 (絶対値)
+  min_pass_rate: 0.7
+  # 個別メトリクスの平均スコア下限 (絶対値)
+  min_metric_scores:
+    faithfulness: 0.8
+    tool_selection: 0.7
+    task_completion: 0.7
+    policy_compliance: 0.8
+  # 実行メトリクスの上限 (コスト暴走の検知)
+  max_avg_cost_usd: 0.05
+  max_avg_latency_ms: 25000

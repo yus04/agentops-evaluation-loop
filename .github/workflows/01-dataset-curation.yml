@@ -1,0 +1,118 @@
+name: 01 - Dataset Curation (Telemetry -> Eval Dataset)
+
+# =============================================================================
+# 【定期実行】Langfuse に蓄積されたテレメトリから評価データセット候補を生成し、
+# Pull Request として提出する。ここから先 (02 評価) は **人間のレビューを挟む** ため
+# チェーン実行しない。レビュー担当者が PR をマージすると 02 が起動する。
+# =============================================================================
+
+on:
+  schedule:
+    # 毎日 18:00 UTC (= 03:00 JST)
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      lookback_hours:
+        description: "取得対象のトレース期間 (時間)"
+        required: false
+        default: "24"
+      max_records:
+        description: "生成する候補レコード数の上限"
+        required: false
+        default: "50"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dataset-curation
+  cancel-in-progress: false
+
+jobs:
+  curate:
+    name: Build dataset candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ vars.LANGFUSE_BASE_URL || 'https://cloud.langfuse.com' }}
+      LANGFUSE_TRACING_ENVIRONMENT: ${{ vars.LANGFUSE_TRACING_ENVIRONMENT || 'production' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Build dataset candidates from Langfuse traces
+        id: build
+        run: |
+          uv run agentops dataset build \
+            --lookback-hours "${{ github.event.inputs.lookback_hours || '24' }}" \
+            --max-records "${{ github.event.inputs.max_records || '50' }}" \
+            --environment "${LANGFUSE_TRACING_ENVIRONMENT}"
+
+      - name: Detect generated candidates
+        id: detect
+        run: |
+          FILE=$(ls -1t data/datasets/candidates/*.jsonl 2>/dev/null | head -n 1 || true)
+          if [ -z "$FILE" ] || [ ! -s "$FILE" ]; then
+            echo "has_candidates=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_candidates=true" >> "$GITHUB_OUTPUT"
+            echo "file=$FILE" >> "$GITHUB_OUTPUT"
+            echo "summary=${FILE%.jsonl}.md" >> "$GITHUB_OUTPUT"
+            echo "count=$(wc -l < "$FILE")" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload candidates as artifact
+        if: steps.detect.outputs.has_candidates == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataset-candidates
+          path: data/datasets/candidates/
+          retention-days: 30
+
+      - name: Compose PR body
+        if: steps.detect.outputs.has_candidates == 'true'
+        run: |
+          {
+            cat "${{ steps.detect.outputs.summary }}"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### マージ後の流れ"
+            echo ""
+            echo '1. 各レコードの `review.status` を `approved` / `rejected` に更新'
+            echo '2. `expected_output` / `expected_tools` / `expected_category` を記入'
+            echo '3. `uv run agentops dataset promote <候補ファイル>` で golden.jsonl へ昇格'
+            echo '4. この PR をマージすると **02 - Batch Evaluation** が自動起動します'
+          } > /tmp/pr-body.md
+
+      - name: Create Pull Request for human review
+        if: steps.detect.outputs.has_candidates == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: dataset/candidates-${{ github.run_number }}
+          base: main
+          commit-message: "chore(dataset): テレメトリから評価データセット候補を生成 (${{ steps.detect.outputs.count }} 件)"
+          title: "[Dataset Review] 評価データセット候補 ${{ steps.detect.outputs.count }} 件"
+          body-path: /tmp/pr-body.md
+          labels: |
+            dataset
+            needs-human-review
+          add-paths: |
+            data/datasets/
+
+      - name: No candidates
+        if: steps.detect.outputs.has_candidates != 'true'
+        run: echo "新規の評価データセット候補はありませんでした。"
