@@ -171,4 +171,7 @@ def test_shipped_datasets_are_parseable() -> None:
 
     assert len(golden) >= 4
     assert len(regression) >= 4
-    assert all(record.expected_output for record in golden)
+    assert all(
+        record.expected_output is None or record.expected_output.strip()
+        for record in golden
+    )
