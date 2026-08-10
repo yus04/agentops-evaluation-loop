@@ -331,9 +331,17 @@ Environment (環境) 配下に登録した場合はジョブに `environment:` �
 
 #### 4.3.5 リポジトリ権限
 
-Settings → **Actions** → **General** → Workflow permissions で
-**Allow GitHub Actions to create and approve pull requests** を有効にしてください
-(01 と 04 が PR を作成するため)。
+01 と 04 は PR を自動作成します。既定では `GITHUB_TOKEN` に PR 作成権限が無いため、
+以下を有効にしないと **候補ブランチの push までは成功するが PR 作成で失敗します**。
+
+1. リポジトリの **Settings** を開く
+2. 左メニュー **Actions** → **General**
+3. ページ下部の **Workflow permissions** セクションまでスクロール
+4. **Allow GitHub Actions to create and approve pull requests** にチェックを入れる
+5. **Save** をクリック
+
+> 失敗時のログには `Create or update the pull request` ステップで
+> `GitHub Actions is not permitted to create or approve pull requests` が出ます。
 
 ---
 
