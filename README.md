@@ -349,7 +349,7 @@ uv run agentops dataset build --lookback-hours 24 --max-records 50
 承認済みレコードを golden へ昇格:
 
 ```bash
-uv run agentops dataset promote data/datasets/candidates/20260809.jsonl
+uv run agentops dataset promote data/datasets/candidates/<YYYYMMDD>.jsonl
 uv run agentops dataset stats
 ```
 
