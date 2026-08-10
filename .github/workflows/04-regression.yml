@@ -34,6 +34,11 @@ jobs:
     timeout-minutes: 90
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Azure OpenAI (Microsoft Foundry) を使う場合にのみ必要
+      AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+      AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+      OPENAI_API_VERSION: ${{ vars.OPENAI_API_VERSION }}
+      AGENT_PROVIDER: ${{ vars.AGENT_PROVIDER || 'openai' }}
       JUDGE_PROVIDER: ${{ vars.JUDGE_PROVIDER || 'openai' }}
       JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'gpt-5' }}
       AGENT_TOOLS_MODE: local

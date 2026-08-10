@@ -267,25 +267,72 @@ cp .env.example .env
 
 ### 4.3 GitHub リポジトリ設定 (パイプラインを使う場合)
 
-**Secrets** (Settings → Secrets and variables → Actions → Secrets):
+ワークフローは `${{ secrets.* }}` / `${{ vars.* }}` を **リポジトリレベル** で参照します。
+Environment (環境) 配下に登録した場合はジョブに `environment:` の宣言が必要になるため、
+特別な理由がなければ下記のリポジトリレベルに登録してください。
 
-| 名前 | 用途 |
-| --- | --- |
-| `OPENAI_API_KEY` | エージェント / Judge / reflection の LLM |
-| `LANGFUSE_PUBLIC_KEY` | テレメトリ取得 |
-| `LANGFUSE_SECRET_KEY` | テレメトリ取得 |
+#### 4.3.1 Secrets の登録手順
 
-**Variables** (同 → Variables、任意):
+1. GitHub のリポジトリページ → **Settings**
+2. 左メニュー **Secrets and variables** → **Actions**
+3. **Secrets** タブ (Repository secrets) → **New repository secret**
+4. 下表の Name / Secret を入力して **Add secret**
 
-| 名前 | 既定値 |
-| --- | --- |
-| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` |
-| `LANGFUSE_TRACING_ENVIRONMENT` | `production` |
-| `JUDGE_MODEL` / `JUDGE_PROVIDER` | `gpt-5` / `openai` |
-| `REFLECTION_MODEL` / `REFLECTION_PROVIDER` | `gpt-5` / `openai` |
+| Name | 用途 | 必須 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | エージェント / Judge / reflection の LLM 呼び出し | ✅ (02・03・04) |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse からのトレース取得 / スコア書き戻し | ✅ (01・02) |
+| `LANGFUSE_SECRET_KEY` | 同上 | ✅ (01・02) |
 
-**リポジトリ権限**: Settings → Actions → General →
-「Allow GitHub Actions to create and approve pull requests」を有効にしてください
+> `GITHUB_TOKEN` は GitHub が自動発行するため登録不要です。
+
+#### 4.3.2 Variables の登録手順
+
+1. 同じ画面の **Variables** タブ → **New repository variable**
+2. 下表の Name / Value を入力して **Add variable**
+
+いずれも未設定の場合はワークフロー側の既定値が使われるため、**すべて任意**です。
+
+| Name | 既定値 | 説明 |
+| --- | --- | --- |
+| `LANGFUSE_BASE_URL` | `https://cloud.langfuse.com` | US: `https://us.cloud.langfuse.com` / JP: `https://jp.cloud.langfuse.com` |
+| `LANGFUSE_TRACING_ENVIRONMENT` | `production` | 01 が収集対象とする environment |
+| `JUDGE_PROVIDER` | `openai` | 評価 (LLM-as-a-Judge) のプロバイダ |
+| `JUDGE_MODEL` | `gpt-5` | 評価モデル。**エージェント用とは必ず別にする** |
+| `REFLECTION_PROVIDER` | `openai` | GEPA reflection LM のプロバイダ |
+| `REFLECTION_MODEL` | `gpt-5` | GEPA が改善候補を書くモデル |
+
+#### 4.3.3 ワークフロー別の必要変数
+
+| ワークフロー | 必要な Secrets | 参照する Variables |
+| --- | --- | --- |
+| 01 Dataset Curation | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` |
+| 02 Evaluation | `OPENAI_API_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | `LANGFUSE_BASE_URL`, `JUDGE_PROVIDER`, `JUDGE_MODEL` |
+| 03 Optimization | `OPENAI_API_KEY` | `JUDGE_*`, `REFLECTION_*` |
+| 04 Regression | `OPENAI_API_KEY` | `JUDGE_PROVIDER`, `JUDGE_MODEL` |
+
+#### 4.3.4 Azure OpenAI (Microsoft Foundry) を使う場合
+
+ワークフローは OpenAI / Azure OpenAI の両方に対応済みです。Azure を使う場合は
+`OPENAI_API_KEY` の代わりに下記を登録してください (ワークフローの編集は不要)。
+
+| 種別 | Name | 例 |
+| --- | --- | --- |
+| Secret | `AZURE_OPENAI_API_KEY` | Azure ポータルのキー |
+| Variable | `AZURE_OPENAI_ENDPOINT` | `https://<resource-name>.openai.azure.com/` |
+| Variable | `OPENAI_API_VERSION` | `2025-04-01-preview` |
+| Variable | `AGENT_PROVIDER` | `azure_openai` |
+| Variable | `JUDGE_PROVIDER` | `azure_openai` |
+| Variable | `REFLECTION_PROVIDER` | `azure_openai` |
+| Variable | `JUDGE_MODEL` / `REFLECTION_MODEL` | Azure の**デプロイ名** |
+
+> `JUDGE_MODEL` / `REFLECTION_MODEL` には、Azure OpenAI の「モデル名」ではなく
+> **デプロイ名** を指定してください。
+
+#### 4.3.5 リポジトリ権限
+
+Settings → **Actions** → **General** → Workflow permissions で
+**Allow GitHub Actions to create and approve pull requests** を有効にしてください
 (01 と 04 が PR を作成するため)。
 
 ---
